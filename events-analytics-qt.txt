@@ -1,0 +1,73 @@
+SELECT
+		 events.id AS "EVENT ID",
+		 events.report_key AS "REPORT KEY",
+		 events.type AS "TYPE",
+		 events.start_date AS "START DATE",
+		 
+			/* Actualized Gate Revenue (already implemented) */
+			CASE
+				 WHEN events.type  = 'tournament' THEN ROUND(COALESCE(gate_summary.total_gate_revenue, 0), 2)
+				 ELSE 0
+			 END AS "ACTUALIZED GATE REVENUE",
+		 /* Actualized Registration Revenue */ ROUND(COALESCE(reg_summary.total_registration_revenue, 0), 2) AS "ACTUALIZED REGISTRATION REVENUE",
+		 
+			/* Team Count (tournament only) */
+			CASE
+				 WHEN events.type  = 'tournament' THEN COALESCE(team_summary.total_teams, 0)
+				 ELSE 0
+			 END AS "TEAM COUNT",
+		 
+			/* Attendee Count (showcase only) */
+			CASE
+				 WHEN events.type  = 'showcase' THEN COALESCE(att_summary.total_attendees, 0)
+				 ELSE 0
+			 END AS "ATTENDEE COUNT",
+		 /* Accepted Teams (all tournaments) */ COALESCE(team_summary.accepted_teams, 0) AS "ACCEPTED TEAMS",
+		 /* Paid Teams */ COALESCE(team_summary.paid_teams, 0) AS "PAID TEAMS",
+		 /* Unpaid Teams */ COALESCE(team_summary.unpaid_teams, 0) AS "UNPAID TEAMS"
+FROM  events /* ========== 1. Pre-aggregated GATE revenue ========== */
+LEFT JOIN(	SELECT
+			 event_id,
+			 SUM(amount) AS total_gate_revenue
+	FROM  payments 
+	WHERE	 (status  = 'succeeded'
+	 OR	status  = 'paid')
+	 AND	category  = 'Gate'
+	GROUP BY  event_id 
+) AS  gate_summary ON gate_summary.event_id  = events.id /* ========== 2. Pre-aggregated REGISTRATION revenue ========== */
+ 
+LEFT JOIN(	SELECT
+			 event_id,
+			 SUM(amount) AS total_registration_revenue
+	FROM  payments 
+	WHERE	 (status  = 'succeeded'
+	 OR	status  = 'paid')
+	 AND	category  = 'Registration'
+	GROUP BY  event_id 
+) AS  reg_summary ON reg_summary.event_id  = events.id /* ========== 3. Pre-aggregated TEAM metrics ========== */
+ 
+LEFT JOIN(	SELECT
+			 event_id,
+			 COUNT(*) AS total_teams,
+			 COUNT(CASE
+					 WHEN deleted_at  IS NULL THEN 1
+				 END) AS accepted_teams,
+			 COUNT(CASE
+					 WHEN deleted_at  IS NULL
+					 AND	is_paid  = 1 THEN 1
+				 END) AS paid_teams,
+			 COUNT(CASE
+					 WHEN deleted_at  IS NULL
+					 AND	is_paid  = 0 THEN 1
+				 END) AS unpaid_teams
+	FROM  event_teams 
+	GROUP BY  event_id 
+) AS  team_summary ON team_summary.event_id  = events.id /* ========== 4. Pre-aggregated ATTENDEE metrics ========== */
+ 
+LEFT JOIN(	SELECT
+			 event_id,
+			 COUNT(*) AS total_attendees
+	FROM  attendees 
+	WHERE	 deleted_at  IS NULL
+	GROUP BY  event_id 
+) AS  att_summary ON att_summary.event_id  = events.id  
