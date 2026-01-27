@@ -1,6 +1,7 @@
 SELECT
 		 events.id AS "EVENT ID",
 		 events.report_key AS "REPORT KEY",
+		 events.title AS "TITLE",
 		 events.type AS "TYPE",
 		 events.start_date AS "START DATE",
 		 
@@ -24,7 +25,8 @@ SELECT
 			 END AS "ATTENDEE COUNT",
 		 /* Accepted Teams (all tournaments) */ COALESCE(team_summary.accepted_teams, 0) AS "ACCEPTED TEAMS",
 		 /* Paid Teams */ COALESCE(team_summary.paid_teams, 0) AS "PAID TEAMS",
-		 /* Unpaid Teams */ COALESCE(team_summary.unpaid_teams, 0) AS "UNPAID TEAMS"
+		 /* Unpaid Teams */ COALESCE(team_summary.unpaid_teams, 0) AS "UNPAID TEAMS",
+		 /* Average Order Total */ ROUND(COALESCE(order_payments.total_amount / NULLIF(order_summary.total_orders, 0), 0), 2) AS "AVERAGE ORDER TOTAL"
 FROM  events /* ========== 1. Pre-aggregated GATE revenue ========== */
 LEFT JOIN(	SELECT
 			 event_id,
@@ -44,7 +46,23 @@ LEFT JOIN(	SELECT
 	 OR	status  = 'paid')
 	 AND	category  = 'Registration'
 	GROUP BY  event_id 
-) AS  reg_summary ON reg_summary.event_id  = events.id /* ========== 3. Pre-aggregated TEAM metrics ========== */
+) AS  reg_summary ON reg_summary.event_id  = events.id /* ========== 3. Pre-aggregated ORDER metrics ========== */
+
+LEFT JOIN(	SELECT
+			 event_id,
+			 SUM(amount) AS total_amount
+	FROM  payments 
+	WHERE	 (status  = 'succeeded'
+	 OR	status  = 'paid')
+	GROUP BY  event_id 
+) AS  order_payments ON order_payments.event_id  = events.id
+
+LEFT JOIN(	SELECT
+			 event_id,
+			 COUNT(*) AS total_orders
+	FROM  orders 
+	GROUP BY  event_id 
+) AS  order_summary ON order_summary.event_id  = events.id /* ========== 4. Pre-aggregated TEAM metrics ========== */
  
 LEFT JOIN(	SELECT
 			 event_id,
@@ -62,7 +80,7 @@ LEFT JOIN(	SELECT
 				 END) AS unpaid_teams
 	FROM  event_teams 
 	GROUP BY  event_id 
-) AS  team_summary ON team_summary.event_id  = events.id /* ========== 4. Pre-aggregated ATTENDEE metrics ========== */
+) AS  team_summary ON team_summary.event_id  = events.id /* ========== 5. Pre-aggregated ATTENDEE metrics ========== */
  
 LEFT JOIN(	SELECT
 			 event_id,
