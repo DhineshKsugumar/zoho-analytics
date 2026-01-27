@@ -1,0 +1,60 @@
+SELECT
+		 events.id AS "EVENT ID",
+		 events.title AS "EVENT",
+		 websites.name AS "BRAND",
+		 events.start_date AS "START DATE",
+		 events.type AS "TYPE",
+		 events.address_state AS "STATE",
+		 
+			/* Registrations Actual */
+			CASE
+				 WHEN events.type  = 'showcase' THEN COUNT(attendees.id)
+				 WHEN events.type  = 'tournament' THEN COUNT(event_teams.id)
+				 ELSE 0
+			 END AS "REGISTRATIONS ACTUAL",
+		 
+			/* Registrations Budgeted */
+			CASE
+				 WHEN events.type  = 'showcase' THEN COALESCE(events.attendee_count_budgeted, 0)
+				 WHEN events.type  = 'tournament' THEN COALESCE(events.team_count_budgeted, 0)
+				 ELSE 0
+			 END AS "REGISTRATIONS BUDGETED",
+		 /* Registrations Variance */ (
+			CASE
+				 WHEN events.type  = 'showcase' THEN COUNT(attendees.id)
+				 WHEN events.type  = 'tournament' THEN COUNT(event_teams.id)
+				 ELSE 0
+			 END -
+			CASE
+				 WHEN events.type  = 'showcase' THEN COALESCE(events.attendee_count_budgeted, 0)
+				 WHEN events.type  = 'tournament' THEN COALESCE(events.team_count_budgeted, 0)
+				 ELSE 0
+			 END) AS "REGISTRATIONS VARIANCE",
+		 /* Registration Revenue Actual */ ROUND(COALESCE(payments_summary.revenue_actual, 0), 2) AS "REGISTRATION REVENUE ACTUAL",
+		 /* Registration Revenue Budgeted */ ROUND(COALESCE(events.registration_revenue_budgeted, 0), 2) AS "REGISTRATION REVENUE BUDGETED",
+		 /* Revenue Variance */ ROUND(COALESCE(payments_summary.revenue_actual, 0) -COALESCE(events.registration_revenue_budgeted, 0), 2) AS "REGISTRATION REVENUE VARIANCE"
+FROM  events
+LEFT JOIN websites ON websites.id  = events.website_id 
+LEFT JOIN attendees ON attendees.event_id  = events.id
+	 AND	attendees.deleted_at  IS NULL 
+LEFT JOIN event_teams ON event_teams.event_id  = events.id
+	 AND	event_teams.deleted_at  IS NULL /* Pre-aggregated payments */ 
+LEFT JOIN(	SELECT
+			 event_id,
+			 SUM(amount) AS revenue_actual
+	FROM  payments 
+	WHERE	 (status  = 'succeeded'
+	 OR	status  = 'paid')
+	 AND	category  = 'Registration'
+	GROUP BY  event_id 
+) AS  payments_summary ON payments_summary.event_id  = events.id  
+GROUP BY events.id,
+	 events.title,
+	 websites.name,
+	 events.start_date,
+	 events.type,
+	 events.address_state,
+	 events.attendee_count_budgeted,
+	 events.team_count_budgeted,
+	 events.registration_revenue_budgeted,
+	  payments_summary.revenue_actual 
