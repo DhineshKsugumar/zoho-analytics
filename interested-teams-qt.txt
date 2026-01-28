@@ -1,0 +1,16 @@
+WITH registered_programs AS (
+	SELECT DISTINCT
+			 et.event_id,
+			 t.program_id
+	FROM  event_teams et
+	JOIN  teams t ON t.id  = et.team_id
+	WHERE	 et.deleted_at  IS NULL
+)
+SELECT
+		 pi.event_id,
+		 COALESCE(SUM(pi.team_count), 0) AS unregistered_interest_team_count
+FROM  program_interests pi
+LEFT JOIN  registered_programs rp ON rp.event_id  = pi.event_id
+ AND	 rp.program_id  = pi.program_id
+WHERE	 rp.program_id  IS NULL
+GROUP BY  pi.event_id

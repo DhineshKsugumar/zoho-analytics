@@ -1,5 +1,6 @@
 SELECT
 		 events.id AS "EVENT ID",
+		 CONCAT('', events.id) AS "EVENT-ID",
 		 events.report_key AS "REPORT KEY",
 		 events.title AS "TITLE",
 		 events.type AS "TYPE",
@@ -55,8 +56,7 @@ LEFT JOIN(	SELECT
 	WHERE	 (status  = 'succeeded'
 	 OR	status  = 'paid')
 	GROUP BY  event_id 
-) AS  order_payments ON order_payments.event_id  = events.id
-
+) AS  order_payments ON order_payments.event_id  = events.id 
 LEFT JOIN(	SELECT
 			 event_id,
 			 COUNT(*) AS total_orders
